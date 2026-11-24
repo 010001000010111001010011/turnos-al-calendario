@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>Turnos al Calendario</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js"></script>
+    <style>
+      :root {
+        --bg: #fbfbf8;
+        --surface: #ffffff;
+        --surface-2: #f1f0ea;
+        --ink: #182230;
+        --ink-soft: #4c5a68;
+        --line: #d9d7cd;
+        --accent: #0e7c66;
+        --accent-ink: #ffffff;
+        --accent-soft: #e2f1ec;
+        --warn: #b5502a;
+        --chip-libre: #e7e5dc;
+        --shadow: 0 1px 2px rgba(24,34,48,.08), 0 8px 24px rgba(24,34,48,.06);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #10151c;
+          --surface: #18202b;
+          --surface-2: #202a38;
+          --ink: #eef2f5;
+          --ink-soft: #a7b4c0;
+          --line: #2e3a49;
+          --accent: #2fae8f;
+          --accent-ink: #0b1512;
+          --accent-soft: #17382f;
+          --warn: #e08a63;
+          --chip-libre: #26303d;
+          --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+        }
+      }
+      * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "Libre Franklin", system-ui, -apple-system, sans-serif;
+        font-size: 16px;
+        line-height: 1.55;
+      }
+      button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]), textarea, label.file-btn { min-height: 2.25rem; }
+      .wrap { max-width: 1060px; margin: 0 auto; padding: 20px 16px 64px; }
+      h1 { font-size: clamp(1.7rem, 4.5vw, 2.6rem); line-height: 1.12; font-weight: 800; letter-spacing: -.01em; margin: 8px 0 10px; }
+      h2 { font-size: 1.35rem; font-weight: 800; margin: 0 0 6px; letter-spacing: -.01em; }
+      h3 { font-size: 1.02rem; font-weight: 800; margin: 0 0 4px; }
+      p { margin: 0 0 12px; }
+      .lede { font-size: 1.08rem; color: var(--ink-soft); max-width: 62ch; }
+      .lede strong { color: var(--ink); }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+      section { margin-top: 40px; }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        box-shadow: var(--shadow);
+        padding: 18px;
+      }
+      .step-tag {
+        display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: .78rem; font-weight: 600;
+        color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 3px 10px; margin-bottom: 8px;
+        text-transform: uppercase; letter-spacing: .06em;
+      }
+      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      @media (max-width: 760px) { .grid-2 { grid-template-columns: 1fr; } }
+
+      /* Shift definition table */
+      table.shifts { width: 100%; border-collapse: collapse; font-size: .92rem; table-layout: fixed; }
+      table.shifts th:nth-child(1), table.shifts td:nth-child(1) { width: 22px; }
+      table.shifts th:nth-child(2), table.shifts td:nth-child(2) { width: 56px; }
+      table.shifts th:nth-child(4), table.shifts td:nth-child(4),
+      table.shifts th:nth-child(5), table.shifts td:nth-child(5) { width: 96px; }
+      table.shifts th:nth-child(6), table.shifts td:nth-child(6) { width: 44px; }
+      @media (max-width: 480px) {
+        table.shifts input[type="text"] { padding: 6px 6px; font-size: .9rem; }
+      }
+      table.shifts th { text-align: left; font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); padding: 4px 6px; border-bottom: 2px solid var(--line); }
+      table.shifts td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+      table.shifts input[type="text"] {
+        width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px;
+        background: var(--surface); color: var(--ink); font: inherit; font-size: .92rem;
+      }
+      table.shifts input.time { font-family: "IBM Plex Mono", monospace; text-align: center; }
+      @media (max-width: 640px) {
+        table.shifts, table.shifts tbody, table.shifts tr, table.shifts td { display: block; width: auto !important; }
+        table.shifts thead { display: none; }
+        table.shifts tr {
+          display: grid; grid-template-columns: 58px 1fr 1fr 44px;
+          grid-template-areas: "code name name del" "dot in out del";
+          gap: 6px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line);
+        }
+        table.shifts td { border-bottom: none; padding: 2px 0; }
+        table.shifts td:nth-child(1) { grid-area: dot; }
+        table.shifts td:nth-child(2) { grid-area: code; }
+        table.shifts td:nth-child(3) { grid-area: name; }
+        table.shifts td:nth-child(4) { grid-area: in; }
+        table.shifts td:nth-child(5) { grid-area: out; }
+        table.shifts td:nth-child(6) { grid-area: del; }
+        table.shifts td:nth-child(4)::before { content: "Entrada"; display: block; font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); margin-bottom: 2px; }
+        table.shifts td:nth-child(5)::before { content: "Salida"; display: block; font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); margin-bottom: 2px; }
+      }
+      table.shifts input.code { font-family: "IBM Plex Mono", monospace; font-weight: 600; text-transform: uppercase; text-align: center; }
+      .dot { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: middle; }
+      .row-actions button { padding: 4px 10px; }
+      .btn {
+        appearance: none; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);
+        border-radius: 8px; padding: 8px 16px; font: inherit; font-weight: 600; font-size: .95rem; cursor: pointer;
+      }
+      .btn:hover { border-color: var(--accent); }
+      .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+      .btn.primary:hover { filter: brightness(1.07); }
+      .btn.small { padding: 5px 12px; font-size: .88rem; }
+      .btn:disabled { opacity: .45; cursor: not-allowed; }
+      textarea {
+        width: 100%; min-height: 150px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+        background: var(--surface); color: var(--ink); font-family: "IBM Plex Mono", monospace; font-size: .9rem; line-height: 1.5; resize: vertical;
+      }
+      select, input[type="month"] {
+        padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit;
+      }
+      .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; align-items: center; }
+      .file-btn {
+        display: inline-flex; align-items: center; border: 1px solid var(--line); background: var(--surface-2);
+        border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: .95rem; cursor: pointer;
+      }
+      .file-btn:hover { border-color: var(--accent); }
+      input[type="file"] { display: none; }
+      .hint { font-size: .86rem; color: var(--ink-soft); }
+      .status { font-size: .9rem; margin-top: 10px; min-height: 1.4em; }
+      .status.err { color: var(--warn); font-weight: 600; }
+
+      /* Calendar */
+      .cal-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+      .cal-title { font-weight: 800; font-size: 1.15rem; text-transform: capitalize; }
+      .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+      .cal-dow { text-align: center; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); padding: 4px 0; }
+      .cal-day {
+        min-height: 64px; border: 1px solid var(--line); border-radius: 8px; padding: 5px 6px;
+        background: var(--surface); cursor: pointer; text-align: left; font: inherit; color: var(--ink); width: 100%;
+      }
+      .cal-day:hover { border-color: var(--accent); }
+      .cal-day.empty { background: transparent; border: none; cursor: default; min-height: 0; }
+      .cal-day.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+      .cal-day .dnum { font-size: .8rem; font-weight: 700; color: var(--ink-soft); }
+      .cal-day.today .dnum { color: var(--accent); }
+      .chip {
+        display: block; margin-top: 4px; border-radius: 5px; padding: 2px 6px; font-size: .78rem; font-weight: 700;
+        font-family: "IBM Plex Mono", monospace; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .chip small { display: block; font-weight: 400; font-size: .68rem; opacity: .92; }
+      .chip.libre { background: var(--chip-libre); color: var(--ink-soft); }
+      @media (max-width: 560px) {
+        .cal-day { min-height: 54px; padding: 4px; }
+        .chip { font-size: .68rem; padding: 1px 4px; }
+        .chip small { display: none; }
+      }
+      .editor {
+        margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 14px;
+        display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+      }
+      .stats { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 14px; }
+      .stat b { display: block; font-size: 1.3rem; font-weight: 800; }
+      .stat span { font-size: .82rem; color: var(--ink-soft); }
+
+      /* Event list */
+      .ev-list { list-style: none; margin: 12px 0 0; padding: 0; }
+      .ev-list li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: .93rem; }
+      .ev-list li:last-child { border-bottom: none; }
+      .ev-date { font-family: "IBM Plex Mono", monospace; font-weight: 600; min-width: 118px; text-transform: capitalize; }
+      .ev-list a { color: var(--accent); font-weight: 600; text-decoration: none; padding: 6px 4px; }
+      .ev-list a:hover { text-decoration: underline; }
+
+      /* Monetization */
+      .plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      @media (max-width: 760px) { .plan-grid { grid-template-columns: 1fr; } }
+      .plan-card ul { margin: 8px 0 0; padding-left: 20px; }
+      .plan-card li { margin-bottom: 5px; }
+      .plan-card.pro { border-color: var(--accent); border-width: 2px; }
+      .price { font-size: 1.6rem; font-weight: 800; }
+      .price small { font-size: .85rem; font-weight: 400; color: var(--ink-soft); }
+      table.math { width: 100%; border-collapse: collapse; font-size: .95rem; }
+      table.math th, table.math td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: right; }
+      table.math th:first-child, table.math td:first-child { text-align: left; }
+      table.math th { font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); }
+      .steps { counter-reset: paso; list-style: none; padding: 0; margin: 0; }
+      .steps li { counter-increment: paso; padding: 12px 0 12px 46px; position: relative; border-bottom: 1px solid var(--line); }
+      .steps li:last-child { border-bottom: none; }
+      .steps li::before {
+        content: counter(paso); position: absolute; left: 0; top: 10px; width: 30px; height: 30px; border-radius: 50%;
+        background: var(--accent); color: var(--accent-ink); font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: .95rem;
+      }
+      .caveat {
+        border: 1px solid var(--warn); border-radius: 10px; padding: 14px 16px; font-size: .93rem;
+      }
+      .caveat h3 { color: var(--warn); }
+      .src { font-size: .85rem; color: var(--ink-soft); }
+      .src a { color: var(--accent); }
+      footer { margin-top: 44px; padding-top: 16px; border-top: 1px solid var(--line); font-size: .85rem; color: var(--ink-soft); }
+      footer a { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <p class="step-tag">La herramienta · probala acá mismo</p>
+      <h1>Tu roster de turnos, directo en tu calendario</h1>
+      <p class="lede">
+        Pegás el horario como te lo pasen — foto del papel pegado en la pared, planilla compartida, códigos tipo
+        <span class="mono">M / T / N</span> — y salen los eventos listos para tu calendario. Lo que ya existe sincroniza
+        planillas limpias; <strong>el hueco es el roster desordenado</strong>, y eso es lo que hace esta página.
+        Abajo está la demo funcionando y después, el plan para cobrarla.
+      </p>
+
+      <!-- PASO 1 -->
+      <section class="card" aria-labelledby="p1">
+        <span class="step-tag">Paso 1</span>
+        <h2 id="p1">Definí tus turnos una sola vez</h2>
+        <p class="hint">Cada código del roster con su horario. Si la salida es menor que la entrada, el turno cruza la medianoche (turno noche). Esta tabla es la que el usuario corrige una vez y queda.</p>
+        <div style="overflow-x:auto">
+          <table class="shifts" id="shiftTable">
+            <thead>
+              <tr><th></th><th>Código</th><th>Nombre</th><th>Entrada</th><th>Salida</th><th></th></tr>
+            </thead>
+            <tbody id="shiftBody"></tbody>
+          </table>
+        </div>
+        <div class="actions">
+          <button class="btn small" id="addShift" type="button">+ Agregar turno</button>
+        </div>
+      </section>
+
+      <!-- PASO 2 -->
+      <section class="card" aria-labelledby="p2">
+        <span class="step-tag">Paso 2</span>
+        <h2 id="p2">Pegá el roster como venga</h2>
+        <p class="hint">
+          Acepta líneas con día y código (<span class="mono">3 M</span>, <span class="mono">12/12 N</span>),
+          horarios sueltos (<span class="mono">5: 07-15</span>) o la fila corrida de códigos
+          (<span class="mono">M T N L L M…</span>) que se reparte desde el día 1.
+          Con la foto, el texto se lee con OCR en tu propio teléfono y cae en la misma caja para que lo revises antes de generar nada.
+        </p>
+        <label for="monthInput" style="font-weight:600">Mes del roster</label>
+        <input type="month" id="monthInput" />
+        <textarea id="rosterText" placeholder="Pegá acá el roster…&#10;Ejemplo:&#10;1 M&#10;2 M&#10;3 T&#10;4 N&#10;5 L"></textarea>
+        <div class="actions">
+          <button class="btn primary" id="parseBtn" type="button">Pasar al calendario</button>
+          <button class="btn" id="sampleBtn" type="button">Cargar un roster de ejemplo</button>
+          <label class="file-btn" for="photoInput">Leer foto del roster</label>
+          <input type="file" id="photoInput" accept="image/*" />
+        </div>
+        <p class="status" id="parseStatus" role="status"></p>
+      </section>
+
+      <!-- PASO 3 -->
+      <section class="card" aria-labelledby="p3">
+        <span class="step-tag">Paso 3</span>
+        <h2 id="p3">Revisá, corregí y descargá</h2>
+        <div class="cal-head">
+          <span class="cal-title" id="calTitle">—</span>
+          <span class="hint">Tocá un día para cambiarle el turno.</span>
+        </div>
+        <div class="cal-grid" id="calDow"></div>
+        <div class="cal-grid" id="calGrid"></div>
+
+        <div class="editor" id="dayEditor" hidden>
+          <strong id="editorLabel">Día</strong>
+          <select id="editorSelect" aria-label="Turno del día elegido"></select>
+          <button class="btn small" id="editorClear" type="button">Sin turno</button>
+        </div>
+
+        <div class="stats" id="statsRow"></div>
+
+        <div class="actions">
+          <button class="btn primary" id="icsBtn" type="button" disabled>Descargar .ics para mi calendario</button>
+          <span class="hint">El archivo .ics se importa en Google Calendar, Apple Calendar y Outlook. Nada sale de tu teléfono: todo se procesa acá.</span>
+        </div>
+        <ul class="ev-list" id="evList"></ul>
+      </section>
+
+      <!-- RENTABILIZACIÓN -->
+      <section aria-labelledby="plata">
+        <span class="step-tag">La pregunta</span>
+        <h2 id="plata">¿Cómo la rentabilizaríamos?</h2>
+        <p style="max-width:66ch">
+          Con <strong>freemium y volumen</strong>. La herramienta es barata de operar (una página web, sin servidores propios
+          que mantener al principio) y el público es enorme — comercio, gastronomía, salud, depósitos, seguridad: cualquiera
+          que trabaje por turnos rotativos. El precio por persona tiene que ser bajo, así que la plata está en la cantidad
+          de usuarios y en una segunda capa para empleadores.
+        </p>
+
+        <div class="plan-grid">
+          <div class="card plan-card">
+            <h3>Gratis — para que entre todo el mundo</h3>
+            <ul>
+              <li>Pegar el roster en texto y descargar el .ics.</li>
+              <li>Foto del roster con lectura automática (OCR) en el teléfono, como en esta demo.</li>
+              <li>Un roster por mes, hasta 31 turnos.</li>
+              <li>Tabla de códigos editable.</li>
+            </ul>
+            <p class="hint" style="margin-top:10px">La versión gratis ya resuelve el dolor. Sirve de publicidad: cada .ics compartido en un grupo de trabajo trae compañeros.</p>
+          </div>
+          <div class="card plan-card pro">
+            <h3>Pro — lo que se cobra</h3>
+            <p class="price">$3–5 <small>USD / mes por persona (precio supuesto, ver salvedad abajo)</small></p>
+            <ul>
+              <li>Sincronización directa con Google Calendar: sin descargar archivos, y si el roster cambia, se actualiza solo sin duplicar eventos.</li>
+              <li>Rosters ilimitados y códigos que se recuerdan solos entre un mes y otro.</li>
+              <li>Aviso cuando cambia un turno ya cargado.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3>La referencia de precio que sí existe</h3>
+          <p>
+            <strong>Cellendar</strong>, la herramienta más parecida que ya cobra, cuesta <strong>$7,99/mes o $59/año</strong> —
+            pero solo sincroniza planillas de Google limpias y ordenadas; no lee fotos ni rosters con códigos desordenados.
+            Nuestro hueco es justamente ese desorden, así que podemos cobrar menos que Cellendar y seguir siendo la única
+            opción para el roster en papel o en foto.
+          </p>
+          <p class="src">Fuente: <a href="https://greatwork.company/apps/cellendar" target="_blank" rel="noopener">greatwork.company/apps/cellendar</a> (verificado el 24/11/2026 en la investigación).</p>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3>Las cuentas, con precio supuesto de $3,99/mes</h3>
+          <div style="overflow-x:auto">
+            <table class="math">
+              <thead><tr><th>Suscriptores Pro</th><th>Ingreso mensual</th><th>Ingreso anual</th></tr></thead>
+              <tbody>
+                <tr><td>100</td><td>$399</td><td>$4.788</td></tr>
+                <tr><td>500</td><td>$1.995</td><td>$23.940</td></tr>
+                <tr><td>2.000</td><td>$7.980</td><td>$95.760</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="hint" style="margin-top:8px">Aritmética ilustrativa sobre un precio supuesto: muestra que el negocio es de volumen, no de precio. Con 100 personas pagando ya cubre de sobra los costos de una herramienta así (dominio, OCR por uso y la tienda de apps si se publica).</p>
+          <h3 style="margin-top:16px">La segunda capa: empleadores</h3>
+          <p>
+            El salto de plata está en venderle al que arma el roster: un plan para negocios chicos donde el encargado sube
+            el horario una vez y le llega el calendario listo a todo el equipo. Precio por empleado y por mes, a definir
+            cuando haya usuarios gratis que lo pidan — primero la base, después el plan empresas.
+          </p>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3>El camino, en orden</h3>
+          <ol class="steps">
+            <li><strong>Validar gratis.</strong> Esta misma página, compartida en grupos de trabajadores por turnos. Si nadie la usa gratis, no hay negocio que cobrar.</li>
+            <li><strong>Sumar la sincronización directa.</strong> Es la función Pro central: elimina el archivo .ics y actualiza sola los cambios del roster.</li>
+            <li><strong>Abrir el Pro a $3–5/mes</strong> con pago anual más barato, siguiendo el molde de Cellendar ($59/año).</li>
+            <li><strong>Plan para empleadores</strong> cuando los propios usuarios lo pidan desde adentro de los equipos.</li>
+          </ol>
+        </div>
+
+        <div class="caveat" style="margin-top:16px">
+          <h3>Salvedades honestas</h3>
+          <p>
+            <strong>Nadie fue citado diciendo «pagaría X» por esta herramienta.</strong> El precio de $3–5/mes es una
+            inferencia a partir del uso semanal que implica un roster y del precio real de Cellendar — no una promesa de
+            demanda paga. La demanda sí está documentada: el pedido apareció listado el <strong>22 y el 23 de noviembre de
+            2026</strong> en el relevamiento de pedidos de Reddit de ProductList Daily («una app que lea el roster de trabajo
+            y pase tus turnos al calendario automáticamente», r/answers). El hilo original de Reddit no se pudo verificar
+            de primera mano porque Reddit bloqueó el acceso durante la investigación, así que no hay votos ni fecha exacta
+            del posteo original que citar.
+          </p>
+          <p class="src" style="margin-bottom:0">Fuente de la demanda: <a href="https://productlist.info/requests" target="_blank" rel="noopener">productlist.info/requests</a> — «What People Want — Reddit Demand», listados del 22 y 23/11/2026.</p>
+        </div>
+      </section>
+
+      <footer>
+        Demo construida a partir de la investigación de herramientas pedidas y no encontradas (21–23/11/2026).
+        La demo procesa todo en tu dispositivo y no guarda tus datos.
+      </footer>
+    </div>
+
+    <script>
+      (function () {
+        "use strict";
+
+        var PALETTE = ["#c07f16", "#0e7c66", "#3a5a8c", "#b5502a", "#5f7a2e", "#7a4a7e", "#0f766e"];
+        var DOW = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+        var MONTHS = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+
+        var shifts = [
+          { code: "M", name: "Mañana", start: "07:00", end: "15:00" },
+          { code: "T", name: "Tarde", start: "15:00", end: "23:00" },
+          { code: "N", name: "Noche", start: "23:00", end: "07:00" },
+          { code: "L", name: "Libre", start: "", end: "" }
+        ];
+        var assignments = {}; // day -> {code} or {custom:true,start,end}
+        var selectedDay = null;
+
+        var $ = function (id) { return document.getElementById(id); };
+        var shiftBody = $("shiftBody"), monthInput = $("monthInput"),
+            rosterText = $("rosterText"), parseStatus = $("parseStatus"),
+            calGrid = $("calGrid"), calDow = $("calDow"), calTitle = $("calTitle"),
+            evList = $("evList"), statsRow = $("statsRow"), icsBtn = $("icsBtn"),
+            dayEditor = $("dayEditor"), editorLabel = $("editorLabel"), editorSelect = $("editorSelect");
+
+        function pad(n) { return (n < 10 ? "0" : "") + n; }
+        function normTime(v) {
+          var m = String(v || "").trim().match(/^(\d{1,2})(?:[:.]?(\d{2}))?$/);
+          if (!m) return "";
+          var h = +m[1], mi = m[2] ? +m[2] : 0;
+          if (h > 24 || mi > 59) return "";
+          return pad(h % 24) + ":" + pad(mi);
+        }
+        function colorFor(code) {
+          var i = shifts.findIndex(function (s) { return s.code === code; });
+          return PALETTE[(i < 0 ? 0 : i) % PALETTE.length];
+        }
+        function shiftByCode(code) {
+          return shifts.find(function (s) { return s.code === String(code).toUpperCase(); }) || null;
+        }
+        function isOff(s) { return !s || !s.start || !s.end; }
+        function hoursOf(s) {
+          if (isOff(s)) return 0;
+          var a = s.start.split(":"), b = s.end.split(":");
+          var mins = (+b[0] * 60 + +b[1]) - (+a[0] * 60 + +a[1]);
+          if (mins <= 0) mins += 24 * 60;
+          return mins / 60;
+        }
+        function fmtHours(h) { return (Math.round(h * 10) / 10).toString().replace(".", ","); }
+
+        /* ---------- Paso 1: tabla de turnos ---------- */
+        function renderShiftTable() {
+          shiftBody.innerHTML = "";
+          shifts.forEach(function (s, i) {
+            var tr = document.createElement("tr");
+            tr.innerHTML =
+              '<td><span class="dot" style="background:' + (isOff(s) ? "var(--chip-libre)" : colorFor(s.code)) + '"></span></td>' +
+              '<td><input type="text" class="code" maxlength="3" value="' + s.code + '" data-i="' + i + '" data-f="code" aria-label="Código"></td>' +
+              '<td><input type="text" value="' + s.name + '" data-i="' + i + '" data-f="name" aria-label="Nombre"></td>' +
+              '<td><input type="text" class="time" inputmode="numeric" placeholder="--:--" maxlength="5" value="' + s.start + '" data-i="' + i + '" data-f="start" aria-label="Entrada"></td>' +
+              '<td><input type="text" class="time" inputmode="numeric" placeholder="--:--" maxlength="5" value="' + s.end + '" data-i="' + i + '" data-f="end" aria-label="Salida"></td>' +
+              '<td class="row-actions"><button type="button" class="btn small" data-del="' + i + '" aria-label="Quitar turno">✕</button></td>';
+            shiftBody.appendChild(tr);
+          });
+          shiftBody.querySelectorAll("input").forEach(function (inp) {
+            inp.addEventListener("change", function () {
+              var i = +inp.getAttribute("data-i"), f = inp.getAttribute("data-f");
+              var oldCode = shifts[i].code;
+              if (f === "code") shifts[i][f] = inp.value.trim().toUpperCase();
+              else if (f === "start" || f === "end") shifts[i][f] = normTime(inp.value);
+              else shifts[i][f] = inp.value;
+              if (f === "code" && oldCode !== shifts[i].code) {
+                Object.keys(assignments).forEach(function (d) {
+                  if (assignments[d].code === oldCode) assignments[d].code = shifts[i].code;
+                });
+              }
+              renderShiftTable(); renderCalendar();
+            });
+          });
+          shiftBody.querySelectorAll("[data-del]").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+              shifts.splice(+btn.getAttribute("data-del"), 1);
+              renderShiftTable(); renderCalendar();
+            });
+          });
+          buildEditorOptions();
+        }
+        $("addShift").addEventListener("click", function () {
+          shifts.push({ code: "", name: "Turno", start: "08:00", end: "16:00" });
+          renderShiftTable();
+        });
+
+        /* ---------- Mes ---------- */
+        function currentYM() {
+          var v = monthInput.value;
+          if (v) { var p = v.split("-"); return { y: +p[0], m: +p[1] - 1 }; }
+          var d = new Date(); return { y: d.getFullYear(), m: d.getMonth() };
+        }
+        (function initMonth() {
+          var d = new Date();
+          monthInput.value = d.getFullYear() + "-" + pad(d.getMonth() + 1);
+        })();
+        monthInput.addEventListener("change", function () { assignments = {}; selectedDay = null; renderCalendar(); });
+
+        /* ---------- Paso 2: parseo ---------- */
+        function parseRoster(text) {
+          var result = {};
+          var ym = currentYM();
+          var daysInMonth = new Date(ym.y, ym.m + 1, 0).getDate();
+          var codes = shifts.map(function (s) { return s.code; }).filter(Boolean)
+            .sort(function (a, b) { return b.length - a.length; });
+          var lines = text.split(/\r?\n/);
+          var matched = 0, unmatched = 0;
+
+          function findCode(str) {
+            var up = " " + str.toUpperCase() + " ";
+            for (var i = 0; i < codes.length; i++) {
+              var re = new RegExp("[^A-ZÁÉÍÓÚÑ0-9]" + codes[i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[^A-ZÁÉÍÓÚÑ0-9]");
+              if (re.test(up)) return codes[i];
+            }
+            return null;
+          }
+          function findTimeRange(str) {
+            var m = str.match(/(\d{1,2})(?:[:.]\d{2})?\s*(?:-|–|—|a|hs?\s*-)\s*(\d{1,2})(?:[:.]\d{2})?/i);
+            if (!m) return null;
+            var a = +m[1], b = +m[2];
+            if (a > 23 || b > 24) return null;
+            return { start: pad(a) + ":00", end: pad(b % 24) + ":00" };
+          }
+
+          lines.forEach(function (line) {
+            if (!line.trim()) return;
+            var day = null, rest = line;
+            var iso = line.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+            var dmy = line.match(/\b(\d{1,2})[\/](\d{1,2})(?:[\/]\d{2,4})?\b/);
+            if (iso) { day = +iso[3]; rest = line.replace(iso[0], " "); }
+            else if (dmy) { day = +dmy[1]; rest = line.replace(dmy[0], " "); }
+            else {
+              var dm = rest.match(/(?:^|\D)([0-3]?\d)(?:\s*(?:de|del|:|-|–|\.)\s*|\s+)/);
+              if (dm && +dm[1] >= 1 && +dm[1] <= 31) { day = +dm[1]; rest = rest.replace(dm[0], " "); }
+            }
+            var range = findTimeRange(rest);
+            var code = findCode(rest);
+            if (day && day <= daysInMonth && (code || range)) {
+              if (range && !code) result[day] = { custom: true, start: range.start, end: range.end, label: range.start + "–" + range.end };
+              else result[day] = { code: code };
+              matched++;
+            } else if (line.trim()) {
+              unmatched++;
+            }
+          });
+
+          if (matched === 0) {
+            // Fila corrida de códigos: "M T N L L M ..."
+            var tokens = text.toUpperCase().split(/[^A-ZÁÉÍÓÚÑ]+/).filter(Boolean);
+            var seq = tokens.filter(function (t) { return codes.indexOf(t) >= 0; });
+            if (seq.length >= 3) {
+              seq.slice(0, daysInMonth).forEach(function (c, idx) { result[idx + 1] = { code: c }; });
+              matched = Math.min(seq.length, daysInMonth);
+              unmatched = 0;
+            }
+          }
+          return { result: result, matched: matched, unmatched: unmatched };
+        }
+
+        $("parseBtn").addEventListener("click", function () {
+          var out = parseRoster(rosterText.value);
+          assignments = out.result;
+          selectedDay = null;
+          if (out.matched === 0) {
+            parseStatus.textContent = "No encontré turnos en ese texto. Revisá que estén los códigos de la tabla del Paso 1 (por ejemplo M, T, N) o probá con el ejemplo.";
+            parseStatus.className = "status err";
+          } else {
+            parseStatus.textContent = "Listo: " + out.matched + " día(s) con turno cargados en el calendario." +
+              (out.unmatched ? " " + out.unmatched + " línea(s) no se pudieron interpretar — corregilas a mano tocando el día." : "");
+            parseStatus.className = "status";
+          }
+          renderCalendar();
+        });
+
+        $("sampleBtn").addEventListener("click", function () {
+          var ym = currentYM();
+          var daysInMonth = new Date(ym.y, ym.m + 1, 0).getDate();
+          var pattern = ["M","M","T","T","N","N","L","L"];
+          var lines = [];
+          for (var d = 1; d <= daysInMonth; d++) lines.push(d + " " + pattern[(d - 1) % pattern.length]);
+          rosterText.value = lines.join("\n");
+          $("parseBtn").click();
+        });
+
+        /* ---------- OCR de foto ---------- */
+        $("photoInput").addEventListener("change", function (ev) {
+          var file = ev.target.files && ev.target.files[0];
+          if (!file) return;
+          if (typeof Tesseract === "undefined") {
+            parseStatus.textContent = "El lector de fotos no cargó (sin conexión). Pegá el roster en texto, que funciona igual.";
+            parseStatus.className = "status err";
+            return;
+          }
+          parseStatus.textContent = "Leyendo la foto… puede tardar unos segundos.";
+          parseStatus.className = "status";
+          Tesseract.recognize(file, "spa").then(function (res) {
+            rosterText.value = res.data.text;
+            parseStatus.textContent = "Foto leída. Revisá el texto y tocá «Pasar al calendario».";
+            parseStatus.className = "status";
+          }).catch(function () {
+            parseStatus.textContent = "No se pudo leer esa foto. Probá con más luz y el papel derecho, o pegá el roster en texto.";
+            parseStatus.className = "status err";
+          });
+        });
+
+        /* ---------- Paso 3: calendario ---------- */
+        function renderCalendar() {
+          var ym = currentYM();
+          var daysInMonth = new Date(ym.y, ym.m + 1, 0).getDate();
+          var firstDow = (new Date(ym.y, ym.m, 1).getDay() + 6) % 7; // lunes = 0
+          var today = new Date();
+          calTitle.textContent = MONTHS[ym.m] + " de " + ym.y;
+          calDow.innerHTML = DOW.map(function (d) { return '<div class="cal-dow">' + d + "</div>"; }).join("");
+          calGrid.innerHTML = "";
+          for (var i = 0; i < firstDow; i++) {
+            var e = document.createElement("div"); e.className = "cal-day empty"; calGrid.appendChild(e);
+          }
+          for (var d = 1; d <= daysInMonth; d++) {
+            (function (day) {
+              var btn = document.createElement("button");
+              btn.type = "button";
+              btn.className = "cal-day" +
+                (today.getFullYear() === ym.y && today.getMonth() === ym.m && today.getDate() === day ? " today" : "") +
+                (selectedDay === day ? " selected" : "");
+              var a = assignments[day];
+              var inner = '<span class="dnum">' + day + "</span>";
+              if (a) {
+                if (a.custom) {
+                  inner += '<span class="chip" style="background:#3a5a8c">' + a.start + "–" + a.end + "</span>";
+                } else {
+                  var s = shiftByCode(a.code);
+                  if (s && isOff(s)) inner += '<span class="chip libre">' + s.code + " · Libre</span>";
+                  else if (s) inner += '<span class="chip" style="background:' + colorFor(s.code) + '">' + s.code + " · " + s.name + "<small>" + s.start + "–" + s.end + "</small></span>";
+                  else inner += '<span class="chip" style="background:#888">' + a.code + "</span>";
+                }
+              }
+              btn.innerHTML = inner;
+              btn.setAttribute("aria-label", "Día " + day + (a && a.code ? ", turno " + a.code : ""));
+              btn.addEventListener("click", function () { selectDay(day); });
+              calGrid.appendChild(btn);
+            })(d);
+          }
+          renderListAndStats(daysInMonth, ym);
+        }
+
+        function buildEditorOptions() {
+          editorSelect.innerHTML = "";
+          shifts.forEach(function (s) {
+            var o = document.createElement("option");
+            o.value = s.code;
+            o.textContent = s.code ? (s.code + " · " + s.name + (isOff(s) ? "" : " (" + s.start + "–" + s.end + ")")) : s.name;
+            editorSelect.appendChild(o);
+          });
+        }
+        function selectDay(day) {
+          selectedDay = day;
+          var ym = currentYM();
+          editorLabel.textContent = "Día " + day + " de " + MONTHS[ym.m];
+          var a = assignments[day];
+          if (a && a.code) editorSelect.value = a.code;
+          dayEditor.hidden = false;
+          renderCalendar();
+        }
+        editorSelect.addEventListener("change", function () {
+          if (selectedDay == null) return;
+          assignments[selectedDay] = { code: editorSelect.value };
+          renderCalendar();
+        });
+        $("editorClear").addEventListener("click", function () {
+          if (selectedDay == null) return;
+          delete assignments[selectedDay];
+          renderCalendar();
+        });
+
+        function eventFor(day, ym) {
+          var a = assignments[day];
+          if (!a) return null;
+          var s, name, start, end, code;
+          if (a.custom) { start = a.start; end = a.end; name = "Turno"; code = ""; }
+          else {
+            s = shiftByCode(a.code);
+            if (!s || isOff(s)) return null;
+            start = s.start; end = s.end; name = "Turno " + s.name; code = s.code;
+          }
+          var startD = new Date(ym.y, ym.m, day, +start.split(":")[0], +start.split(":")[1]);
+          var endD = new Date(ym.y, ym.m, day, +end.split(":")[0], +end.split(":")[1]);
+          if (endD <= startD) endD.setDate(endD.getDate() + 1);
+          return { day: day, name: name, summary: a.custom ? ("Turno " + start + "–" + end) : name, code: code, start: start, end: end, startD: startD, endD: endD, hours: (endD - startD) / 36e5 };
+        }
+
+        function renderListAndStats(daysInMonth, ym) {
+          var events = [];
+          for (var d = 1; d <= daysInMonth; d++) { var ev = eventFor(d, ym); if (ev) events.push(ev); }
+          var offs = Object.keys(assignments).filter(function (d) {
+            var a = assignments[d]; return a.code && isOff(shiftByCode(a.code));
+          }).length;
+          var totalH = events.reduce(function (acc, e) { return acc + e.hours; }, 0);
+          var nights = events.filter(function (e) { return e.endD.getDate() !== e.startD.getDate(); }).length;
+          statsRow.innerHTML =
+            '<div class="stat"><b>' + events.length + '</b><span>turnos trabajados</span></div>' +
+            '<div class="stat"><b>' + fmtHours(totalH) + ' h</b><span>horas en el mes</span></div>' +
+            '<div class="stat"><b>' + nights + '</b><span>turnos que cruzan la medianoche</span></div>' +
+            '<div class="stat"><b>' + offs + '</b><span>días libres</span></div>';
+          icsBtn.disabled = events.length === 0;
+          evList.innerHTML = "";
+          events.forEach(function (e) {
+            var li = document.createElement("li");
+            var dateStr = DOW[(e.startD.getDay() + 6) % 7] + " " + e.day + "/" + (ym.m + 1);
+            var gcal = "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" +
+              encodeURIComponent(e.summary) + "&dates=" + icsDate(e.startD) + "/" + icsDate(e.endD) +
+              "&details=" + encodeURIComponent("Cargado desde Turnos al Calendario");
+            li.innerHTML = '<span class="ev-date">' + dateStr + '</span><span>' + e.name +
+              ' · ' + e.start + "–" + e.end + ' (' + fmtHours(e.hours) + ' h)</span>' +
+              '<a href="' + gcal + '" target="_blank" rel="noopener">Añadir a Google Calendar</a>';
+            evList.appendChild(li);
+          });
+        }
+
+        /* ---------- ICS ---------- */
+        function icsDate(d) {
+          return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + "T" + pad(d.getHours()) + pad(d.getMinutes()) + "00";
+        }
+        function icsEscape(t) { return t.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n"); }
+        icsBtn.addEventListener("click", function () {
+          var ym = currentYM();
+          var daysInMonth = new Date(ym.y, ym.m + 1, 0).getDate();
+          var now = new Date();
+          var stamp = now.getUTCFullYear() + pad(now.getUTCMonth() + 1) + pad(now.getUTCDate()) + "T" +
+            pad(now.getUTCHours()) + pad(now.getUTCMinutes()) + pad(now.getUTCSeconds()) + "Z";
+          var lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Turnos al Calendario//ES", "CALSCALE:GREGORIAN"];
+          for (var d = 1; d <= daysInMonth; d++) {
+            var ev = eventFor(d, ym);
+            if (!ev) continue;
+            lines.push("BEGIN:VEVENT");
+            lines.push("UID:turno-" + ym.y + pad(ym.m + 1) + pad(d) + "-" + (ev.code || "x") + "@turnos-al-calendario");
+            lines.push("DTSTAMP:" + stamp);
+            lines.push("DTSTART:" + icsDate(ev.startD));
+            lines.push("DTEND:" + icsDate(ev.endD));
+            lines.push("SUMMARY:" + icsEscape(ev.summary));
+            lines.push("END:VEVENT");
+          }
+          lines.push("END:VCALENDAR");
+          var blob = new Blob([lines.join("\r\n")], { type: "text/calendar;charset=utf-8" });
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement("a");
+          a.href = url;
+          a.download = "turnos-" + ym.y + "-" + pad(ym.m + 1) + ".ics";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+        });
+
+        renderShiftTable();
+        renderCalendar();
+      })();
+    </script>
+  </body>
+</html>
